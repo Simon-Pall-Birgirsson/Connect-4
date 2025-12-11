@@ -1,6 +1,7 @@
 from machine import Pin, SoftI2C
 from I2C_LCD import I2cLcd
 from neopixel import NeoPixel
+from time import sleep_ms
 
 E = (0, 0, 0)
 X = (255, 0, 0)
@@ -8,14 +9,14 @@ O = (0, 0, 255)
     
     
 NUM_LEDS = 7*9
-neopixel = NeoPixel(Pin(0, Pin.OUT), NUM_LEDS)
+neopixel = NeoPixel(Pin(4, Pin.OUT), NUM_LEDS)
 NUM_LEDS_LENGTH = 9
 NUM_LEDS_HEIGHT = 7
-selector = NeoPixel(Pin(0, Pin.OUT), NUM_LEDS_LENGTH)
-
-button_left = Pin(0, Pin.IN, Pin.PULL_UP)
-button_right = Pin(0, Pin.IN, Pin.PULL_UP)
-button_drop = Pin(0, Pin.IN, Pin.PULL_UP)
+button_left = Pin(10, Pin.IN, Pin.PULL_UP)
+button_right = Pin(9, Pin.IN, Pin.PULL_UP)
+button_drop = Pin(18, Pin.IN, Pin.PULL_UP)
+i2c = SoftI2C(scl=Pin(42), sda=Pin(41))  
+lcd = I2cLcd(i2c, 39, 2, 16)
 
 #Kernels
 """
@@ -100,22 +101,27 @@ def victory(state):
                     led_states[i][u] = X
                 else:
                     led_states[i][u] = O
+                sleep_ms(2500)
     elif state == 1:
         for i in range(len(led_states)):
             for u in range(len(led_states[i])):
-                led_states[i][u] = X   
+                led_states[i][u] = X
+                sleep_ms(2500)
     elif state == 2:
         for i in range(len(led_states)):
             for u in range(len(led_states[i])):
                 led_states[i][u] = O
+                sleep_ms(2500)
 
 turn = True # True = X, False = O
-buzzer_anger = False #if the buzzer should do a bad tone if the player did something wrong
+buzzer_anger = False #if the buzzer should do a bad tone if the player did something wrong # Unused for now 
 player_x_score = 0
 player_o_score = 0
-
+flash_on = True
 
 while True:
+    
+    current_piece = X if turn else O
     
     if player_x_score >= 250 and player_x_score == player_o_score:
         victory(0)
@@ -136,33 +142,43 @@ while True:
     
     num = 0
     
-    for i in led_selector_state:
-        selector[num] = i
-            
-        num += 1
-    selector.write()
-    
     if button_left.value() == 0:
-        if selector_pos == 0:
-            selector_pos = 8
-        else:
-            selector_pos -= 1
-     
+        selector_pos = (selector_pos - 1) % NUM_LEDS_LENGTH
+
     if button_right.value() == 0:
-        if selector_pos == 8:
-            selector_pos = 0
-        else:
-            selector_pos += 1
-            
+        selector_pos = (selector_pos + 1) % NUM_LEDS_LENGTH
+                
     if button_drop.value() == 0:
-        if led_states[1][selector_pos] == E:
-            if turn == True:
-                led_states[1][selector_pos] = X
+        if led_states[selector_pos][0] == E:
+            if turn:
+                led_states[selector_pos][0] == X
             else:
-                led_states[1][selector_pos] = O
-            turn = not turn 
-        else:
-            buzzer_anger = True
+                led_states[selector_pos][o] == O
+        sleep_ms(150) 
+
+                
+
+    gravity()                
+        
+    flash_col = None
+    for x in range(NUM_LEDS_LENGTH):
+        if led_states[0][x] == E:
+            flash_col = x
+            break
+
+    for y in range(NUM_LEDS_HEIGHT):
+        for x in range(NUM_LEDS_LENGTH):
+            color = led_states[y][x]
+            if y == 0 and x == flash_col:
+                color = current_piece if flash_on else E
+            neopixel[y * NUM_LEDS_LENGTH + x] = color
+
+    neopixel.write()
+    flash_on = not flash_on
+    sleep_ms(100)
+
+
+ 
             
     gravity()
     
@@ -326,3 +342,16 @@ while True:
             
     player_x_score = (X_long4_count * 10) + (X_square_count * 15) + (X_long5_count * 25)
     player_o_score = (O_long4_count * 10) + (O_square_count * 15) + (O_long5_count * 25)
+    
+
+
+
+    lcd.clear()
+
+    o_score_str = str(player_o_score)
+    lcd.putstr(" " * (16 - len(o_score_str)) + o_score_str)
+
+    lcd.move_to(0, 1)
+    lcd.putstr(str(player_x_score))
+
+
